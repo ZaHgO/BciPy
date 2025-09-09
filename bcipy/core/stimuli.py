@@ -2,6 +2,7 @@
 import glob
 import itertools
 import logging
+import math
 import random
 import re
 from abc import ABC, abstractmethod
@@ -634,6 +635,7 @@ def best_case_rsvp_inq_gen(alp: list,
 
 def generate_calibration_inquiries(
         alp: List[str],
+        alp2: Optional[List[str]] = None,
         timing: Optional[List[float]] = None,
         jitter: Optional[int] = None,
         color: Optional[List[str]] = None,
@@ -668,14 +670,17 @@ def generate_calibration_inquiries(
         timing
     ) == 3, "timing must include values for [target, fixation, stimuli]"
     time_target, time_fixation, time_stim = timing
-    fixation = get_fixation(is_txt)
+
+    if not alp2:
+        alp2 = alp
+
     target_indexes = generate_target_positions(inquiry_count, stim_per_inquiry,
                                                percentage_without_target,
                                                target_positions)
     if stim_order == StimuliOrder.ALPHABETICAL:
         targets = None
     else:
-        targets = generate_targets(alp, inquiry_count,
+        targets = generate_targets(alp2, inquiry_count,
                                    percentage_without_target)
     inquiries = generate_inquiries(alp, inquiry_count, stim_per_inquiry,
                                    stim_order)
@@ -686,9 +691,10 @@ def generate_calibration_inquiries(
         target_pos = target_indexes[i]
         target = inquiry_target(inquiry,
                                 target_pos,
-                                symbols=alp,
+                                symbols=alp2,
                                 next_targets=targets,
                                 last_target=target)
+        fixation = get_fixation(is_txt, target)
         samples.append([target, fixation, *inquiry])
     times = [[
         time_target, time_fixation,
@@ -792,6 +798,7 @@ def generate_inquiry(symbols: List[str], length: int,
     Returns:
         List[str]: Generated inquiry.
     """
+    # TODO: smoscosog - Allow repeating if length is greater than len(symbols)
     inquiry = random.sample(symbols, k=length)
     if stim_order == StimuliOrder.ALPHABETICAL:
         inquiry = alphabetize(inquiry)
@@ -844,6 +851,10 @@ def inquiry_target(inquiry: List[str],
             # update inquiry to set the target at the expected position.
             symbol_at_target_position = inquiry[target_position]
             inquiry[symbol_inquiry_position] = symbol_at_target_position
+            inquiry[target_position] = target
+        else:
+            target = next_targets[0]
+            next_targets.remove(target)
             inquiry[target_position] = target
 
     return inquiry[target_position]
@@ -993,7 +1004,8 @@ def generate_targets(symbols: List[str], inquiry_count: int,
     target_count, no_target_count = compute_counts(inquiry_count,
                                                    percentage_without_target)
     # each symbol should appear at least once
-    symbol_count = int(target_count / len(symbols)) or 1
+    # TODO: smoscosog - Fix this. len(targets) will be less than target_count if target_count > len(symbols). Probablemente redondeando hacia arriba.
+    symbol_count = int(math.ceil(target_count / len(symbols))) or 1
     targets = symbols * symbol_count
     random.shuffle(targets)
     return targets
@@ -1134,16 +1146,33 @@ def soundfiles(directory: str) -> Iterator[str]:
     return itertools.cycle(glob.glob(directory + '*.wav'))
 
 
-def get_fixation(is_txt: bool) -> str:
+def get_fixation(is_txt: bool, target: Optional[str] = None) -> str:
     """Return the correct stimulus fixation given the type (text or image).
 
     Args:
         is_txt (bool): Whether the fixation is text or image.
+        target (str): target of the stimulus
 
     Returns:
         str: Fixation stimulus (text or image path).
     """
+    log.info(f'get_fixation({is_txt=}, {target=})')
     if is_txt:
         return DEFAULT_TEXT_FIXATION
+    elif not target:
+        return DEFAULT_FIXATION_PATH
     else:
+        paths = [
+            path.join(path.dirname(target), 'fixations', path.basename(target)),
+            path.splitext(target)[0] + '_fixation' + path.splitext(target)[1],
+            path.join(path.dirname(target), 'fixations', 'default.png'),
+            path.join(path.dirname(target), 'fixations', 'default.bmp'),
+            path.join(path.dirname(target), 'fixation.png'),
+            path.join(path.dirname(target), 'fixation.bmp')
+        ]
+
+        for x in paths:
+            if path.exists(x):
+                return x
+
         return DEFAULT_FIXATION_PATH

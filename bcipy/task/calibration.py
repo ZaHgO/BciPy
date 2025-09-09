@@ -1,6 +1,7 @@
 """Base calibration task."""
 # mypy: disable-error-code="override"
 import logging
+import os
 from abc import abstractmethod
 from typing import Any, Dict, Iterator, List, NamedTuple, Optional, Tuple
 
@@ -98,6 +99,9 @@ class BaseCalibrationTask(Task):
         self.experiment_clock = Clock()
         self.start_time = self.experiment_clock.getTime()
         self._symbol_set = alphabet(parameters)
+        p2 = parameters.copy()
+        p2['path_to_presentation_images'] = os.path.join(p2['path_to_presentation_images'], 'Vehicles/')
+        self._symbol_set2 = alphabet(p2)
 
         self.file_save = file_save
         self.trigger_handler = TriggerHandler(self.file_save, TRIGGER_FILENAME,
@@ -121,6 +125,11 @@ class BaseCalibrationTask(Task):
     def symbol_set(self) -> List[str]:
         """Symbols used in the calibration"""
         return self._symbol_set
+    
+    @property
+    def symbol_set2(self) -> List[str]:
+        """Symbols used in the calibration"""
+        return self._symbol_set2
 
     def setup(
             self,
@@ -190,6 +199,7 @@ class BaseCalibrationTask(Task):
         parameters = self.parameters
         schedule = generate_calibration_inquiries(
             self.symbol_set,
+            self.symbol_set2,
             inquiry_count=parameters['stim_number'],
             stim_per_inquiry=parameters['stim_length'],
             stim_order=StimuliOrder(parameters['stim_order']),
@@ -203,7 +213,8 @@ class BaseCalibrationTask(Task):
             color=[
                 parameters['target_color'], parameters['fixation_color'],
                 parameters['stim_color']
-            ])
+            ],
+            is_txt=parameters['is_txt_stim'])
         return (Inquiry(*inq) for inq in schedule.inquiries())
 
     def init_session(self) -> session_data.Session:

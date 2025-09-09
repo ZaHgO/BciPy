@@ -314,6 +314,9 @@ class RSVPDisplay(Display):
         for idx, stim in enumerate(self.stimuli_inquiry):
             current_stim = {}
 
+            if self.stimuli_timing[idx] == 0:
+                continue
+
             current_stim['time_to_present'] = self.stimuli_timing[idx]
 
             this_stimuli_size = (self.size_list_sti[idx] if self.size_list_sti
